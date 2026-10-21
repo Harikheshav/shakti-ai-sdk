@@ -1,0 +1,3 @@
+#!/bin/sh
+# shakti-ai-sdk from the command line (tools/aisdk.py): ./aisdk build|run MODEL ... ; ./aisdk -h
+exec python3 "$(dirname "$0")/tools/aisdk.py" "$@"
