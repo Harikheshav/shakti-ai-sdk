@@ -1,0 +1,119 @@
+diff --git a/lib/Dialect/Torch/Transforms/MatchQuantizedOps.cpp b/lib/Dialect/Torch/Transforms/MatchQuantizedOps.cpp
+index d873892..f3aab8e 100644
+--- a/lib/Dialect/Torch/Transforms/MatchQuantizedOps.cpp
++++ b/lib/Dialect/Torch/Transforms/MatchQuantizedOps.cpp
+@@ -36,13 +36,23 @@ Type getQuantizedType(MLIRContext *context, Type t) {
+   return {};
+ }
+ 
+-class MatchQuantizeOperator : public OpRewritePattern<OperatorOp> {
++// Matches the quantized_decomposed operations both as generic torch.operator
++// ops and as the typed ops of the same name (which the ONNX importer creates),
++// with the same operands.
++class MatchQuantizeOperator : public RewritePattern {
+ public:
+-  using OpRewritePattern::OpRewritePattern;
+-  LogicalResult matchAndRewrite(OperatorOp op,
++  MatchQuantizeOperator(MLIRContext *context)
++      : RewritePattern(MatchAnyOpTypeTag(), /*benefit=*/1, context) {}
++  LogicalResult matchAndRewrite(Operation *op,
+                                 PatternRewriter &rewriter) const override {
+-    if (op.getName() == "torch.quantized_decomposed.quantize_per_tensor") {
+-      auto resultTy = cast<ValueTensorType>(op.getType(0));
++    StringRef name = op->getName().getStringRef();
++    if (auto operatorOp = dyn_cast<OperatorOp>(op))
++      name = operatorOp.getName();
++    if (!name.starts_with("torch.quantized_decomposed."))
++      return failure();
++
++    if (name == "torch.quantized_decomposed.quantize_per_tensor") {
++      auto resultTy = cast<ValueTensorType>(op->getResult(0).getType());
+       auto qeTy = getQuantizedType(rewriter.getContext(), resultTy.getDtype());
+       if (!qeTy)
+         qeTy = resultTy.getDtype();
+@@ -50,24 +60,24 @@ public:
+       auto qTy =
+           rewriter.getType<ValueTensorType>(resultTy.getOptionalSizes(), qeTy);
+       Value quant = AtenQuantizePerTensorOp::create(
+-          rewriter, op.getLoc(), qTy,
+-          /*self=*/op.getOperand(0), /*scale=*/op.getOperand(1),
+-          /*zero_point=*/op.getOperand(2), /*dtype=*/op.getOperand(5));
++          rewriter, op->getLoc(), qTy,
++          /*self=*/op->getOperand(0), /*scale=*/op->getOperand(1),
++          /*zero_point=*/op->getOperand(2), /*dtype=*/op->getOperand(5));
+ 
+       if (qTy != resultTy) {
+-        quant = AtenIntReprOp::create(rewriter, op.getLoc(), resultTy, quant);
++        quant = AtenIntReprOp::create(rewriter, op->getLoc(), resultTy, quant);
+       }
+ 
+       rewriter.replaceOpWithNewOp<AtenClampOp>(
+-          op, resultTy, quant, op.getOperand(3), op.getOperand(4));
++          op, resultTy, quant, op->getOperand(3), op->getOperand(4));
+       return success();
+     }
+ 
+     auto prepareDequantize = [&](Value quantMin, Value quantMax, Value &clamp,
+                                  Type &qTy) {
+       clamp =
+-          AtenClampOp::create(rewriter, op.getLoc(), op.getOperand(0).getType(),
+-                              op.getOperand(0), quantMin, quantMax);
++          AtenClampOp::create(rewriter, op->getLoc(), op->getOperand(0).getType(),
++                              op->getOperand(0), quantMin, quantMax);
+ 
+       auto clampTy = cast<Torch::ValueTensorType>(clamp.getType());
+       if (!clampTy.hasDtype())
+@@ -75,41 +85,41 @@ public:
+                                            "dequantization has unknown dtype");
+ 
+       Type dtype = clampTy.getDtype();
+-      Type qetype = getQuantizedType(op.getContext(), dtype);
++      Type qetype = getQuantizedType(op->getContext(), dtype);
+       if (!qetype)
+         return rewriter.notifyMatchFailure(op,
+                                            "dequantization has unknown qtype");
+ 
+-      qTy = Torch::ValueTensorType::get(op.getContext(),
++      qTy = Torch::ValueTensorType::get(op->getContext(),
+                                         clampTy.getOptionalSizes(), qetype);
+       return success();
+     };
+ 
+-    if (op.getName() == "torch.quantized_decomposed.dequantize_per_tensor") {
++    if (name == "torch.quantized_decomposed.dequantize_per_tensor") {
+       Value clamp;
+       Type qTy;
+-      if (failed(prepareDequantize(op.getOperand(3), op.getOperand(4), clamp,
++      if (failed(prepareDequantize(op->getOperand(3), op->getOperand(4), clamp,
+                                    qTy)))
+         return failure();
+ 
+       auto quant = Aten_MakePerTensorQuantizedTensorOp::create(
+-          rewriter, op.getLoc(), qTy, clamp, op.getOperand(1),
+-          op.getOperand(2));
++          rewriter, op->getLoc(), qTy, clamp, op->getOperand(1),
++          op->getOperand(2));
+       rewriter.replaceOpWithNewOp<AtenDequantizeTensorOp>(
+-          op, op.getResultTypes(), quant);
++          op, op->getResultTypes(), quant);
+       return success();
+     }
+ 
+-    if (op.getName() == "torch.quantized_decomposed.dequantize_per_channel") {
++    if (name == "torch.quantized_decomposed.dequantize_per_channel") {
+       Value clamp;
+       Type qTy;
+-      if (failed(prepareDequantize(op.getOperand(4), op.getOperand(5), clamp,
++      if (failed(prepareDequantize(op->getOperand(4), op->getOperand(5), clamp,
+                                    qTy)))
+         return failure();
+       auto quant = Aten_MakePerChannelQuantizedTensorOp::create(
+-          rewriter, op.getLoc(), qTy, clamp, op.getOperand(1), op.getOperand(2),
+-          op.getOperand(3));
+-      rewriter.replaceOpWithNewOp<AtenDequantizeSelfOp>(op, op.getResultTypes(),
++          rewriter, op->getLoc(), qTy, clamp, op->getOperand(1), op->getOperand(2),
++          op->getOperand(3));
++      rewriter.replaceOpWithNewOp<AtenDequantizeSelfOp>(op, op->getResultTypes(),
+                                                         quant);
+       return success();
+     }
