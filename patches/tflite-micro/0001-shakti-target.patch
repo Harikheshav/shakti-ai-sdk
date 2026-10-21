@@ -1,0 +1,157 @@
+diff --git a/tensorflow/lite/micro/shakti/debug_log.cc b/tensorflow/lite/micro/shakti/debug_log.cc
+new file mode 100644
+index 0000000..0f35f54
+--- /dev/null
++++ b/tensorflow/lite/micro/shakti/debug_log.cc
+@@ -0,0 +1,41 @@
++/* Copyright 2026 The TensorFlow Authors. All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++==============================================================================*/
++
++// SHAKTI (shakti-ai-sdk): the log goes to the console through the C library (the runtime's _write: the SoC's
++// console UART or Spike's host interface).
++#include "tensorflow/lite/micro/debug_log.h"
++
++#include <cstdio>
++
++#ifndef TF_LITE_STRIP_ERROR_STRINGS
++#include "eyalroz_printf/src/printf/printf.h"
++#endif
++
++extern "C" void DebugLog(const char* format, va_list args) {
++#ifndef TF_LITE_STRIP_ERROR_STRINGS
++  constexpr int kMaxLogLen = 256;
++  char log_buffer[kMaxLogLen];
++  vsnprintf_(log_buffer, kMaxLogLen, format, args);
++  std::fputs(log_buffer, stdout);
++  std::fflush(stdout);
++#endif
++}
++
++#ifndef TF_LITE_STRIP_ERROR_STRINGS
++extern "C" int DebugVsnprintf(char* buffer, size_t buf_size, const char* format,
++                              va_list vlist) {
++  return vsnprintf_(buffer, buf_size, format, vlist);
++}
++#endif
+diff --git a/tensorflow/lite/micro/shakti/micro_time.cc b/tensorflow/lite/micro/shakti/micro_time.cc
+new file mode 100644
+index 0000000..d6bd218
+--- /dev/null
++++ b/tensorflow/lite/micro/shakti/micro_time.cc
+@@ -0,0 +1,36 @@
++/* Copyright 2026 The TensorFlow Authors. All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++==============================================================================*/
++
++// SHAKTI (shakti-ai-sdk): time in core clock cycles (mcycle; user-mode rdcycle traps on cores without U mode).
++// SHAKTI_CLOCK_HZ: the core clock (the SoC's CLOCK_FREQUENCY), so ticks_per_second() converts to seconds.
++#include "tensorflow/lite/micro/micro_time.h"
++
++#ifndef SHAKTI_CLOCK_HZ
++#define SHAKTI_CLOCK_HZ 50000000
++#endif
++
++namespace tflite {
++namespace micro {
++
++uint32_t ticks_per_second() { return SHAKTI_CLOCK_HZ; }
++
++uint32_t GetCurrentTimeTicks() {
++  unsigned long cycles;
++  __asm__ volatile("csrr %0, mcycle" : "=r"(cycles));
++  return static_cast<uint32_t>(cycles);
++}
++
++}  // namespace micro
++}  // namespace tflite
+diff --git a/tensorflow/lite/micro/shakti/system_setup.cc b/tensorflow/lite/micro/shakti/system_setup.cc
+new file mode 100644
+index 0000000..515e96d
+--- /dev/null
++++ b/tensorflow/lite/micro/shakti/system_setup.cc
+@@ -0,0 +1,26 @@
++/* Copyright 2026 The TensorFlow Authors. All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++    http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++==============================================================================*/
++
++// SHAKTI (shakti-ai-sdk): the runtime's start-up has set up the core (traps, floating point, .bss, constructors)
++// and the SoC (its generated board_init) before main, so nothing is left to do here.
++#include "tensorflow/lite/micro/system_setup.h"
++
++namespace tflite {
++namespace micro {
++
++void InitializeTarget() {}
++
++}  // namespace micro
++}  // namespace tflite
+diff --git a/tensorflow/lite/micro/tools/make/targets/shakti_makefile.inc b/tensorflow/lite/micro/tools/make/targets/shakti_makefile.inc
+new file mode 100644
+index 0000000..7467ea1
+--- /dev/null
++++ b/tensorflow/lite/micro/tools/make/targets/shakti_makefile.inc
+@@ -0,0 +1,30 @@
++# SHAKTI RISC-V cores (IIT Madras c-class) on SHAKTI SoCs; built by shakti-ai-sdk, which takes the ISA, ABI and
++# memory from the SoC's target description.  TARGET=shakti selects tensorflow/lite/micro/shakti/ (console
++# log, mcycle time).  SHAKTI_ARCH / SHAKTI_ABI: e.g. rv64imafdc_zicsr_zifencei / lp64d.
++TARGET_ARCH := riscv
++TARGET_TOOLCHAIN_PREFIX := riscv64-unknown-elf-
++
++SHAKTI_ARCH ?= rv64imafdc_zicsr_zifencei
++SHAKTI_ABI ?= lp64d
++
++PLATFORM_FLAGS = \
++  -march=$(SHAKTI_ARCH) \
++  -mabi=$(SHAKTI_ABI) \
++  -mcmodel=medany \
++  -fno-builtin-printf \
++  -DTF_LITE_MCU_DEBUG_LOG \
++  -DTF_LITE_USE_GLOBAL_CMATH_FUNCTIONS \
++  -funsigned-char \
++  -fno-delete-null-pointer-checks \
++  -fomit-frame-pointer
++
++CXXFLAGS += $(PLATFORM_FLAGS) \
++  -fno-use-cxa-atexit \
++  -DTF_LITE_USE_GLOBAL_MIN \
++  -DTF_LITE_USE_GLOBAL_MAX
++CCFLAGS += $(PLATFORM_FLAGS)
++
++BUILD_TYPE := micro
++LDFLAGS += --specs=nano.specs
++
++include $(MAKEFILE_DIR)/ext_libs/eyalroz_printf.inc
