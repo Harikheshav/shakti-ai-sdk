@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""MLIR for shakti-ai-sdk: build LLVM, MLIR and torch-mlir from frameworks/, and set up Python to use them.
+"""MLIR for shakti-ai-sdk: build LLVM, MLIR, clang and torch-mlir from frameworks/, and set up Python to use them.
 
 usage: tools/mlir_build.py build [-j N]       (run with the conversion environment: env/requirements-convert.lock)
 
 One in-tree build (build/mlir, CMake + Ninja): frameworks/llvm-project with MLIR and its Python bindings, and
 frameworks/torch-mlir as an external project (its FX importer: PyTorch -> MLIR, in Python, with the installed
 PyTorch; no PyTorch C++ extensions, no StableHLO).  LLVM's targets: the host and RISC-V (llc writes the objects).
+clang compiles the C of TVM's kernels and TFLite Micro for ISAs with the vector extension (GCC 13 does not
+vectorise for it).
 Release, without tests, examples or benchmarks: about 15 GB.
 """
 import os
@@ -38,7 +40,7 @@ def build(jobs):
     subprocess.run([
         "cmake", "-G", "Ninja", os.path.join(LLVM, "llvm"),
         "-DCMAKE_BUILD_TYPE=Release", "-DLLVM_ENABLE_ASSERTIONS=OFF",
-        "-DLLVM_ENABLE_PROJECTS=mlir", "-DLLVM_TARGETS_TO_BUILD=host;RISCV",
+        "-DLLVM_ENABLE_PROJECTS=mlir;clang", "-DLLVM_TARGETS_TO_BUILD=host;RISCV",
         "-DLLVM_EXTERNAL_PROJECTS=torch-mlir", f"-DLLVM_EXTERNAL_TORCH_MLIR_SOURCE_DIR={TORCH_MLIR}",
         "-DMLIR_ENABLE_BINDINGS_PYTHON=ON", f"-DPython3_EXECUTABLE={sys.executable}",
         f"-DPython_EXECUTABLE={sys.executable}",

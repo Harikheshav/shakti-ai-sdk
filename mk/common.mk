@@ -32,6 +32,24 @@ endif
 
 CC := $(CROSS)gcc
 CXX := $(CROSS)g++
+LINK := $(CROSS)g++
+# the vector extension (V, or Zve* in MARCH): C and C++ compiled by the SDK's clang (build/mlir/bin, built by
+# tools/mlir_build.py: GCC 13 does not vectorise for it) with GCC's headers and libraries; linked by GCC as always.
+# VCC=gcc keeps GCC.
+RV_VECTOR := $(if $(HOST),,$(if $(findstring v,$(subst rv32,,$(subst rv64,,$(firstword $(subst _, ,$(MARCH)))))),1,$(if $(findstring _zve,$(MARCH)),1)))
+ifeq ($(RV_VECTOR)$(VCC),1)
+CLANG_DIR ?= $(SDK)/build/mlir/bin
+ifeq ($(wildcard $(CLANG_DIR)/clang),)
+$(error $(MARCH) has the vector extension: its C is compiled by clang, not built yet (tools/mlir_build.py build); VCC=gcc uses GCC without vectors)
+endif
+GCC_ROOT := $(abspath $(dir $(shell command -v $(CROSS)gcc))..)
+# (newlib's headers searched last: the multilib toolchain keeps RV32 and RV64 in one riscv64-unknown-elf tree, where
+# clang finds the C++ headers but, for RV32, not the C ones)
+CLANG_TARGET := --target=riscv$(if $(filter rv64%,$(MARCH)),64,32)-unknown-elf --gcc-toolchain=$(GCC_ROOT) \
+                -idirafter $(GCC_ROOT)/$(patsubst %-,%,$(notdir $(CROSS)))/include
+CC := $(CLANG_DIR)/clang $(CLANG_TARGET)
+CXX := $(CLANG_DIR)/clang++ $(CLANG_TARGET)
+endif
 OBJCOPY := $(CROSS)objcopy
 OBJDUMP := $(CROSS)objdump
 
@@ -63,7 +81,7 @@ $(foreach s,$(SRCS),$(eval $(call compile,$(s))))
 -include $(OBJS:.o=.d)                           # the headers (and included C) each object was compiled from
 
 $(OUT)/$(APP).elf: $(OBJS) $(BUILD)/soc/link.ld
-	$(CXX) $(LDFLAGS) $(OBJS) $(APP_LIBS) -lm -Wl,-Map,$(OUT)/$(APP).map -o $@
+	$(LINK) $(LDFLAGS) $(OBJS) $(APP_LIBS) -lm -Wl,-Map,$(OUT)/$(APP).map -o $@
 
 $(OUT)/$(APP).bin: $(OUT)/$(APP).elf
 	$(OBJCOPY) -O binary $< $@

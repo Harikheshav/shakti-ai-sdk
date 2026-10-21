@@ -83,6 +83,24 @@ Spike and on this machine.
 platform files instead of the SHAKTI target's; MLIR's LLVM IR compiled by llc for the host): a quick check of an
 app before Spike or a SoC.  The check programs' "cycles" are nanoseconds there.
 
+**The vector extension (RVV 1.0).** An ISA with V (`rv64imafdcv`) or an embedded subset (`_zve32x`, `_zve32f`,
+`_zve64d`, with `_zvl<N>b` for longer vectors) builds vector programs: the C and C++ (TVM's kernels, TFLite Micro,
+the runtime and checks) are compiled by the SDK's clang (`tools/mlir_build.py` builds it with MLIR; GCC 13 does
+not vectorise for RISC-V), MLIR's LLVM IR by llc with `+v`, and GCC links as for every target; the start-up turns
+the vector unit on (`mstatus.VS`). `VCC=gcc` keeps GCC (no vector code). Results are bit-exact as without vectors
+(no floating-point reassociation). mlp_sine on Spike, cycles per inference:
+
+| | rv64imafdc | rv64imafdcv |
+|---|---|---|
+| TFLite Micro int8 / float | 6296 / 4170 | 5039 / 3327 |
+| TVM int8 / float | 5851 / 3521 | 1745 / 1321 |
+| MLIR int8 / float | 4476 / 2514 | 1961 / 1052 |
+
+```sh
+./aisdk run lenet5 --isa rv64imafdcv --tests 3                  # every framework, int8 and float, on Spike
+./aisdk build my_model.py --isa rv32imafc_zve32f_zvl128b -o out/ # ELFs for a small vector core
+```
+
 ## Common examples
 
 `models/<name>/model.py` is a PyTorch model; `tools/export.py` (the conversion environment,
@@ -152,5 +170,5 @@ tests/phase1.sh [<target dir> ...]                         # all three on Spike 
 0. Skeleton: pinned submodules, patch tool, runtime, `hello` on Spike (RV64, then RV32).
 1. TensorFlow Lite Micro. 2. TVM. 3. MLIR (torch-mlir). 4. Model files in PyTorch or Keras (templates, summary,
 editor completions, the lowering stages), `SOC=host`, target directories and the `aisdk` command.
-Each phase is done for RV64 first, then RV32. Next: the vector extension (RVV 1.0), then the draft matrix
-extensions (Zvvmm, Zvvfmm).
+5. The vector extension (RVV 1.0 and its Zve subsets), through clang and LLVM.
+Each phase is done for RV64 first, then RV32.

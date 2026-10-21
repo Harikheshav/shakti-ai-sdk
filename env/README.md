@@ -11,6 +11,8 @@
   torchvision, ONNX, onnx2tf, tf2onnx, TensorFlow, Keras and tf_keras, ai-edge-litert); the examples look for it in
   `../.venv-ai` (else `PYTHON_AI=<python>`).
 - `SOC=host` (`mk/common.mk`, `tools/soc.py`): no cross toolchain; the machine's own gcc / g++ and C library.
+- Vector ISAs (V, Zve*): clang from the MLIR build (`build/mlir/bin/clang`, `tools/mlir_build.py`) compiles the C and
+  C++ against this GCC's headers and libraries; GCC links.
 - TVM: CMake, Ninja and an LLVM TVM supports (`llvm-config`, e.g. Ubuntu's `llvm-17-dev`) for
   `tools/tvm_build.py build`.
 - `env/setup.sh [--clean]` does all of the above that is Python or built from source (conversion environment,
