@@ -1,0 +1,5 @@
+# Example models, fetched by tools/fetch.py into the cache (never committed).  The same model is used by every
+# framework where possible (examples/), exported from one source; framework-only models belong to projects/.
+#   <name>:
+#     url: <url>
+#     sha256: <hex>
