@@ -1,0 +1,21 @@
+# Sources the frameworks download while building (TFLite Micro: flatbuffers, gemmlowp, ruy, kissfft ...; TVM:
+# dlpack, dmlc-core ...), pinned by sha256 and fetched into the cache by tools/fetch.py, never committed.
+# Filled per phase from the pinned framework's own download list.  Format:
+#   <name>:
+#     url: <url>
+#     sha256: <hex>
+
+# TensorFlow Lite Micro (frameworks/tflite-micro, tensorflow/lite/micro/tools/make/download_dependencies.py; the
+# md5 there matches these files)
+tflm-flatbuffers:
+  url: https://github.com/google/flatbuffers/archive/refs/tags/v25.9.23.zip
+  sha256: 083a424984986ba7fcd1635d54417d4523a3c729e137575db2421e996a1fb816
+  file: flatbuffers-v25.9.23.zip
+tflm-kissfft:
+  url: https://github.com/mborgerding/kissfft/archive/refs/tags/v130.zip
+  sha256: ac2259f84e372a582270ed7c7b709d02e6ca9c7206e40bb58de6ef77f6474872
+  file: kissfft-v130.zip
+tflm-eyalroz_printf:
+  url: https://github.com/eyalroz/printf/archive/f8ed5a9bd9fa8384430973465e94aa14c925872d.zip
+  sha256: 5c7cffe6f83734c2cb226a58bbd2467273334e6df7ba64c5cd79b020d6d607df
+  file: eyalroz_printf-f8ed5a9b.zip

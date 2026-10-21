@@ -1,0 +1,47 @@
+/* shakti-ai-sdk runtime: one program in RAM (template; tools/soc.py fills in the target's memory). */
+OUTPUT_ARCH("riscv")
+ENTRY(_start)
+
+MEMORY { RAM (rwx) : ORIGIN = @MEMORY_BASE@, LENGTH = @MEMORY_SIZE@ }
+
+__stack_size = DEFINED(__stack_size) ? __stack_size : 64K;
+
+SECTIONS
+{
+  .text : {
+    KEEP(*(.text.init))
+    *(.text .text.*)
+  } > RAM
+  .rodata : ALIGN(16) { *(.rodata .rodata.*) *(.srodata .srodata.*) } > RAM
+  .preinit_array : ALIGN(8) { PROVIDE_HIDDEN(__preinit_array_start = .); KEEP(*(.preinit_array)); PROVIDE_HIDDEN(__preinit_array_end = .); } > RAM
+  .init_array : ALIGN(8) {
+    PROVIDE_HIDDEN(__init_array_start = .);
+    KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*)))
+    KEEP(*(.init_array .ctors))
+    PROVIDE_HIDDEN(__init_array_end = .);
+  } > RAM
+  .fini_array : ALIGN(8) {
+    PROVIDE_HIDDEN(__fini_array_start = .);
+    KEEP(*(SORT_BY_INIT_PRIORITY(.fini_array.*) SORT_BY_INIT_PRIORITY(.dtors.*)))
+    KEEP(*(.fini_array .dtors))
+    PROVIDE_HIDDEN(__fini_array_end = .);
+  } > RAM
+  .eh_frame : { KEEP(*(.eh_frame)) } > RAM
+  .tohost : ALIGN(64) { *(.tohost) } > RAM          /* Spike's host interface (HTIF); unused on a SoC */
+  .data : ALIGN(16) {
+    *(.data .data.*)
+    . = ALIGN(8);
+    PROVIDE(__global_pointer$ = . + 0x800);
+    *(.sdata .sdata.*)
+  } > RAM
+  .bss (NOLOAD) : ALIGN(16) {
+    __bss_start = .;
+    *(.sbss .sbss.*) *(.bss .bss.*) *(COMMON)
+    . = ALIGN(16);
+    __bss_end = .;
+  } > RAM
+  __heap_start = ALIGN(__bss_end, 16);
+  __stack_top = ORIGIN(RAM) + LENGTH(RAM);
+  __heap_end = __stack_top - __stack_size;
+  ASSERT(__heap_end >= __heap_start, "the program and its stack do not fit the target's memory")
+}

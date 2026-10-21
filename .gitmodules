@@ -1,0 +1,20 @@
+[submodule "frameworks/tflite-micro"]
+	path = frameworks/tflite-micro
+	url = https://github.com/tensorflow/tflite-micro.git
+	shallow = true
+	ignore = dirty
+[submodule "frameworks/tvm"]
+	path = frameworks/tvm
+	url = https://github.com/apache/tvm.git
+	shallow = true
+	ignore = dirty
+[submodule "frameworks/torch-mlir"]
+	path = frameworks/torch-mlir
+	url = https://github.com/llvm/torch-mlir.git
+	shallow = true
+	ignore = dirty
+[submodule "frameworks/llvm-project"]
+	path = frameworks/llvm-project
+	url = https://github.com/llvm/llvm-project.git
+	shallow = true
+	ignore = dirty
