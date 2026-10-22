@@ -16,6 +16,8 @@ for fw in tflm tvm mlir; do tests/examples.sh "$fw" mlp_sine || fail=1; done
 if [ -x build/mlir/bin/clang ]; then
   out=$(./aisdk run mlp_sine --isa rv64imafdcv); echo "$out" | grep -E "^  "
   echo "$out" | grep -q FAIL && { echo "FAIL vector (rv64imafdcv)"; fail=1; } || echo "PASS vector (rv64imafdcv)"
+else
+  echo "SKIP vector (rv64imafdcv): no clang in build/mlir/bin"
 fi
 for f in build/*; do grep -qx "$(basename "$f")" <<< "$before" || rm -rf "$f"; done
 exit $fail

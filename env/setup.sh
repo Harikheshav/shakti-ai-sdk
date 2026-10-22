@@ -7,7 +7,8 @@
 #
 # usage: env/setup.sh [--clean]
 #   --clean   keep only what the tools use: MLIR's opt / llc / mlir-opt / mlir-translate / torch-mlir-opt and its
-#             Python package, TVM's libraries; the llvm-project working tree, build trees and pip caches go
+#             Python package, clang with its headers (the vector extension), TVM's libraries; the llvm-project
+#             working tree, build trees and pip caches go
 # needs: git, Ninja, a C++ compiler, lld; PYTHON (default python3.12) with its headers; LLVM_CONFIG for TVM (default
 # llvm-config-17); JOBS (default: all cores) for the LLVM build.  CMake comes from pip (TVM's tvm-ffi wants 3.26 or
 # later).  Safe to re-run: what is there is kept.
@@ -48,9 +49,14 @@ if [ "$CLEAN" = 1 ]; then
   ( cd build/mlir
     pkg=tools/torch-mlir/python_packages
     if [ -d "$pkg" ] && [ ! -d keep ]; then
-      mkdir -p keep/bin keep/$pkg
+      mkdir -p keep/bin keep/lib keep/$pkg
       cp -rL "$pkg/torch_mlir" "keep/$pkg/"      # the package links into the sources: copy the files themselves
       cp bin/opt bin/llc bin/mlir-opt bin/mlir-translate bin/torch-mlir-opt keep/bin/
+      # clang for the vector extension (mk/common.mk): the versioned binary, its clang / clang++ links and its
+      # resource directory (riscv_vector.h and the other builtin headers)
+      if [ -e bin/clang ]; then
+        cp "bin/$(readlink bin/clang)" keep/bin/ && cp -P bin/clang bin/clang++ keep/bin/ && cp -r lib/clang keep/lib/
+      fi
       find . -mindepth 1 -maxdepth 1 ! -name keep -exec rm -rf {} +
       mv keep/* . && rmdir keep
     fi )
